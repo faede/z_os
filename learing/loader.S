@@ -14,7 +14,7 @@
 				 dd DESC_DATA_HIGH4
 
 	VIDEO_DESC: dd 0x80000007				; limit=(0xbfffff-0xb8000)/4k=0x7
-			dd DES_VIDEO_HIGH4 				; 此时dpl为0
+			dd DESC_VIDEO_HIGH4 				; 此时dpl为0
 
 	GDT_SIZE equ $ - GDT_BASE
 	GDT_LIMIT equ GDT_SIZE - 1
