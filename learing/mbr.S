@@ -9,6 +9,19 @@ SECTION MBR vstart=0x7c00
 	mov ax, 0xb800
 	mov gs, ax
 
+;清屏
+;利用0x06 号功能，上卷全部行，则可清屏
+;--------------------------------------
+;--------------------------------------
+;INT 0x10 功能号：0x06 功能描述：上卷窗口
+;--------------------------------------
+;输入：
+;AH 功能号= 0x06
+;AL = 上卷的行数（如果为0，表示全部）
+;BH = 上卷行属性
+;(CL,CH) = 窗口左上角的(X,Y)位置
+;(DL,DH) = 窗口右下角的(X,Y)位置
+;无返回值：
 	mov ax, 0x600
 	mov bx, 0x700
 	mov cx,0
@@ -31,26 +44,35 @@ SECTION MBR vstart=0x7c00
 	mov byte [gs:0x08], 'A'
 	mov byte [gs:0x09], 0xA4
 
-	mov eax, LOADER_START_SECTOR 
-	mov bx, LOADER_BASE_ADDR
-	mov	cx, 1
-	call rd_disk_m_16
+	mov eax, LOADER_START_SECTOR 		;起始扇区lba地址
+	mov bx, LOADER_BASE_ADDR			;写入的地址
+	mov	cx, 4 							;读入四个扇区
+	call rd_disk_m_16					;以下读取程序的起始部分(一个扇区)
 
 	jmp LOADER_BASE_ADDR
-
+;-------------------------------------
   rd_disk_m_16:
-	mov esi, eax
-	mov di, cx
-
+;-------------------------------------
+										; eax=LBA 扇区号
+										; bx=将数据写入的内存地址
+										; cx=读入的扇区数
+	mov esi, eax		;备份eax
+	mov di, cx			;备份cx
+;读写硬盘:
+;第1 步:设置要读取的扇区数
 	mov dx, 0x1f2
 	mov al, cl
-	out dx, al
+	out dx, al 			;读取的扇区数
 
-	mov eax, esi
+	mov eax, esi 		;恢复ax
 
+;第2 步:将LBA 地址存入0x1f3 ～ 0x1f6
+
+	;LBA 地址7～0 位写入端口0x1f3
 	mov dx, 0x1f3
 	out dx, al
 
+	;LBA 地址15～8 位写入端口0x1f4
 	mov cl, 8
 	shr eax, cl
 	mov dx,0x1f4
@@ -61,28 +83,34 @@ SECTION MBR vstart=0x7c00
 	out dx, al	
 
 	shr eax, cl
-	and al, 0x0f
-	or al, 0xe0
+	and al, 0x0f 	;lba 第24～27 位
+	or al, 0xe0 	; 设置7～4 位为1110,表示lba 模式
 	mov dx, 0x1f6
 	out dx,al
 
+;第3 步:向0x1f7 端口写入读命令,0x20
 	mov dx,0x1f7
 	mov al,0x20
 	out dx,al
 
+;第4 步:检测硬盘状态
   .not_ready:
+    ;同一端口,写时表示写入命令字,读时表示读入硬盘状态
 	nop
 	in al, dx
-	and al, 0x88
+	and al, 0x88	;第4 位为1 表示硬盘控制器已准备好数据传输
+					;第7 位为1 表示硬盘忙
 
 	cmp al,0x08
 	jnz .not_ready
 
+;第5 步:从0x1f0 端口读数据
 	mov ax,di
 	mov dx, 256
 	mul dx
 	mov cx, ax
-
+					; di 为要读取的扇区数,一个扇区有512 字节,每次读入一个字
+					; 共需di*512/2 次,所以di*256
 	mov dx, 0x1f0
   .go_on_read:
 	in ax,dx
