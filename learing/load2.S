@@ -36,8 +36,8 @@
 	gdt_ptr dw GDT_LIMIT
 			dd GDT_BASE
 
-;人工对齐: total_mem_bytes4 + gdt_ptr6 + ards_buf244+ards_nr2,共256字节
-	ards_buf times db 0
+;人工对齐 total_mem_bytes4 + gdt_ptr6 + ards_buf244+ards_nr2,共256字节
+	ards_buf times 244 db 0
 	ards_nr dw 0		;record number of ards struct
 
 
@@ -151,6 +151,9 @@
 	mov cr0, eax
 
 	jmp dword SELECTOR_CODE:p_mode_start 		;刷新流水线 
+	
+.error_hlt:
+	hlt
 
 [bits 32]
 p_mode_start:
@@ -179,7 +182,7 @@ p_mode_start:
     add esp, 0xc0000000
 
     ; set cr3 to PDE
-    mov eaxm PAGE_DIR_TABLE_POS
+    mov eax, PAGE_DIR_TABLE_POS
     mov cr3, eax
 
     ; open cr0  pg bit
@@ -259,33 +262,3 @@ setup_page:
     add eax, 0x1000
     loop .create_kernel_pde
     ret 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
