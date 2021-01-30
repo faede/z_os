@@ -167,6 +167,24 @@ p_mode_start:
 	mov gs, ax
 
 
+
+;---------------------------- load kernel ----------------------------------- 
+
+	mov eax, KERNEL_START_SECTOR ; sector of kernel.bin
+	mov ebx, KERNEL_BIN_BASE_ADDR	; read from disk, write to ebx address
+	
+	mov ecx, 200 ; number of sector
+
+	call rd_disk_m_32
+
+
+
+
+;-------------------------- create PDE and init memory bit map ---------------
+
+
+
+
 ; create PDE and init memory bit map
     call setup_page
 
@@ -262,3 +280,142 @@ setup_page:
     add eax, 0x1000
     loop .create_kernel_pde
     ret 
+
+
+
+
+;--------------------------------------------------------------------
+rd_disk_m_16:
+;--------------------------------------------------------------------
+										; eax=LBA 扇区号
+										; bx=将数据写入的内存地址
+										; cx=读入的扇区数
+	mov esi, eax		;备份eax
+	mov di, cx			;备份cx
+;读写硬盘:
+;第1 步:设置要读取的扇区数
+	mov dx, 0x1f2
+	mov al, cl
+	out dx, al 			;读取的扇区数
+
+	mov eax, esi 		;恢复ax
+
+;第2 步:将LBA 地址存入0x1f3 ～ 0x1f6
+
+	;LBA 地址7～0 位写入端口0x1f3
+	mov dx, 0x1f3
+	out dx, al
+
+	;LBA 地址15～8 位写入端口0x1f4
+	mov cl, 8
+	shr eax, cl
+	mov dx,0x1f4
+	out dx, al
+
+	shr eax, cl
+	mov dx,0x1f5
+	out dx, al	
+
+	shr eax, cl
+	and al, 0x0f 	;lba 第24～27 位
+	or al, 0xe0 	; 设置7～4 位为1110,表示lba 模式
+	mov dx, 0x1f6
+	out dx,al
+
+;第3 步:向0x1f7 端口写入读命令,0x20
+	mov dx,0x1f7
+	mov al,0x20
+	out dx,al
+
+;第4 步:检测硬盘状态
+  .not_ready:
+    ;同一端口,写时表示写入命令字,读时表示读入硬盘状态
+	nop
+	in al, dx
+	and al, 0x88	;第4 位为1 表示硬盘控制器已准备好数据传输
+					;第7 位为1 表示硬盘忙
+
+	cmp al,0x08
+	jnz .not_ready
+
+;第5 步:从0x1f0 端口读数据
+	mov ax,di
+	mov dx, 256
+	mul dx
+	mov cx, ax
+					; di 为要读取的扇区数,一个扇区有512 字节,每次读入一个字
+					; 共需di*512/2 次,所以di*256
+	mov dx, 0x1f0
+  .go_on_read:
+	in ax,dx 
+	mov [ebx],ax ;
+	add ebx, 2
+	loop .go_on_read
+	ret
+
+
+
+
+
+
+
+
+
+
+
+; ---------------------------- copy segment to kernel.bin -----------------
+kernel_bin:
+	xor eax, eax
+	xor ebx, ebx ; ebx save program header
+	xor ecx, ecx ; cx save number of program header
+	xor edx, edx ; dx save scale of program header , e_phentsize
+
+	mov dx, [KERNEL_BIN_BASE_ADDR + 42] ; offset 42 is e_phentsize
+	mov ebx, [KERNEL_BIN_BASE_ADDR + 28] ; offset 28 is e_phoff
+
+	add ebx, KERNEL_BIN_BASE_ADDR
+	mov cx, [KERNEL_BIN_BASE_ADDR + 44] ; offset 44 is e_phnum
+
+.each_segment:
+	cmp byte [ebx + 0], PT_NULL ; if p_type == PT_NULL , program header unused
+	je .PTNULL
+
+
+	; push argument for memcpy
+	; memcpy(dst, src, size)
+	push dword [ebx + 16] ; third argument of memcpy
+
+	mov eax, [ebx + 4] ; p_offset 
+	add eax, KERNEL_BIN_BASE_ADDR
+
+	push eax 			 ; second argument of memcpy
+	push dword [ebx + 8] ; first argument of memcpy
+
+	call dword memcpy
+
+	add ebx, edx ; edx is e_phentsize
+
+	loop .each_segment
+	ret
+
+
+
+;---------------- copy by bytes memcpy(dst, src, size) --------------
+memcpy:
+	cld
+	push ebp
+	mov ebp, esp
+	push ecx 				; rep use ecx
+
+	mov edi, [ebp + 8] 		; dst
+	mov esi, [ebp + 12]		; src
+	mov ecx, [ebp + 16]		; size
+
+	rep movsb				; copy by bytes
+
+	; resume enviorment
+
+	pop ecx
+	pop ebp
+	ret
+

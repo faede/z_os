@@ -51,7 +51,7 @@ SECTION MBR vstart=0x7c00
 
 	jmp LOADER_BASE_ADDR + 0x300
 ;-------------------------------------
-  rd_disk_m_16:
+rd_disk_m_16:
 ;-------------------------------------
 										; eax=LBA 扇区号
 										; bx=将数据写入的内存地址
