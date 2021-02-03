@@ -211,11 +211,14 @@ p_mode_start:
     lgdt [gdt_ptr]
 
 
-	mov byte [gs:160], 'V'
-	
-    jmp $
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	jmp SELECTOR_CODE:enter_kernel
+enter_kernel:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
+	call kernel_init
+	mov esp, 0xc009f000
+	jmp KERNEL_ENTRY_POINT
 
 
 
@@ -364,7 +367,7 @@ rd_disk_m_16:
 
 
 ; ---------------------------- copy segment to kernel.bin -----------------
-kernel_bin:
+kernel_init:
 	xor eax, eax
 	xor ebx, ebx ; ebx save program header
 	xor ecx, ecx ; cx save number of program header
@@ -391,7 +394,9 @@ kernel_bin:
 	push eax 			 ; second argument of memcpy
 	push dword [ebx + 8] ; first argument of memcpy
 
-	call dword memcpy
+	call  memcpy
+	add esp, 12
+.PTNULL
 
 	add ebx, edx ; edx is e_phentsize
 
